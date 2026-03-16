@@ -1,14 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(
-  splice
-  VERSION 0.1.0
-  DESCRIPTION "A header-only C++26 reflection-based hook and mixin library"
-  HOMEPAGE_URL "https://github.com/FloofyPlasma/splice"
-  LANGUAGES CXX
+        splice
+        VERSION 0.1.0
+        DESCRIPTION "A header-only C++26 reflection-based hook and mixin library"
+        HOMEPAGE_URL "https://github.com/FloofyPlasma/splice"
+        LANGUAGES CXX
 )
 
 option(SPLICE_BUILD_TESTS "Build splice tests" OFF)
+option(SPLICE_BUILD_EXAMPLES "Build splice examples" OFF)
 
 add_library(splice INTERFACE)
 add_library(splice::splice ALIAS splice)
@@ -18,13 +19,17 @@ target_compile_features(splice INTERFACE cxx_std_26)
 target_compile_options(splice INTERFACE -freflection)
 
 target_include_directories(splice INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
 
 if (SPLICE_BUILD_TESTS)
-  enable_testing()
-add_subdirectory(tests)
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
+
+if (SPLICE_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif ()
 
 include(GNUInstallDirs)
