@@ -1,0 +1,289 @@
+#pragma once
+
+#include <memory>
+#include <mutex>
+#include <print>
+#include <string>
+#include <utility>
+
+#include "splice/detail/hook_chain.hpp"
+#include "splice/detail/meta_utils.hpp"
+#include "splice/detail/priority.hpp"
+#include "splice/detail/result.hpp"
+
+namespace splice
+{
+
+#if defined(NDEBUG)
+#define SPLICE_ASSERT(cond, msg) ((void) 0)
+#else
+#define SPLICE_ASSERT(cond, msg)                                                                                       \
+  do                                                                                                                   \
+  {                                                                                                                    \
+    if (!(cond))                                                                                                       \
+    {                                                                                                                  \
+      std::println(stderr, "[splice] assertion failed: {}", (msg));                                                    \
+      std::abort();                                                                                                    \
+    }                                                                                                                  \
+  } while (0)
+#endif
+
+  /// @brief Per-class hook registry. Holds a HookChain for every method on @p T
+  /// annotated with `[[= hookable{}]]`.
+  ///
+  /// Obtain the process-wide shared instance via `ClassRegistry<T>::shared()`.
+  /// The registry is lazily constructed on first use and destroyed when all
+  /// `shared_ptr` handles are released.
+  ///
+  /// @tparam T The class whose hookable methods this registry manages.
+  ///
+  /// @par Example
+  /// @code
+  /// auto reg = ClassRegistry<GameWorld>::shared();
+  /// reg->inject<^^GameWorld::mineBlock, InjectPoint::Head>(fn);
+  /// reg->dispatch<^^GameWorld::mineBlock>(&world, &steve, 10, 64, 5);
+  /// @endcode
+  template<typename T>
+  class ClassRegistry
+  {
+    static constexpr auto Methods = hookable_methods<T>();
+
+    ChainTuple<T> m_chains;
+
+    /// @brief Initialises every chain with its original function wrapper.
+    /// Private, use `shared()` or `make_isolated()` to obtain an instance.
+    ClassRegistry()
+    {
+      template for (constexpr std::meta::info m: Methods)
+      {
+        chain<m>().original = make_original<m>(static_cast<ParamTuple<m> *>(nullptr));
+      }
+    }
+
+  public:
+    /// @brief Creates a fresh, isolated registry instance not shared with any other caller.
+    ///
+    /// @note Intended for unit testing only; prefer `shared()` in production code.
+    /// @returns A `shared_ptr` to a newly constructed `ClassRegistry<T>`.
+    static std::shared_ptr<ClassRegistry<T>> make_isolated()
+    {
+      return std::shared_ptr<ClassRegistry<T>>(new ClassRegistry<T>());
+    }
+
+    /// @brief Returns the process-wide shared `ClassRegistry` for @p T, constructing
+    /// it on first call if no live instance exists.
+    ///
+    /// The registry is destroyed automatically when all `shared_ptr` handles go
+    /// out of scope. Thread-safe.
+    ///
+    /// @note Intended to be stored in an `inline` variable via the `SPLICE_REGISTRY` macro:
+    /// @code
+    /// SPLICE_REGISTRY(GameWorld, g_world);
+    /// @endcode
+    /// @returns A `shared_ptr` to the shared `ClassRegistry<T>`.
+    static std::shared_ptr<ClassRegistry<T>> shared()
+    {
+      static std::weak_ptr<ClassRegistry<T>> s_instance;
+      static std::mutex s_mutex;
+
+      std::lock_guard lock(s_mutex);
+      if (auto p = s_instance.lock())
+        return p;
+
+      // Use new directly since make_shared cannot access a private constructor.
+      auto p = std::shared_ptr<ClassRegistry<T>>(new ClassRegistry<T>());
+      s_instance = p;
+      return p;
+    }
+
+    /// @brief Returns a reference to the `HookChain` for the reflected method @p Method.
+    ///
+    /// @tparam Method A reflection of a hookable member of @p T.
+    template<std::meta::info Method>
+    [[nodiscard]] __attribute__((always_inline)) auto &chain()
+    {
+      return std::get<typename ChainFor<T, Method>::type>(m_chains);
+    }
+
+    /// @brief Const overload of `chain()` for read-only contexts.
+    ///
+    /// @tparam Method A reflection of a hookable member of @p T.
+    template<std::meta::info Method>
+    [[nodiscard]] __attribute__((always_inline)) const auto &chain() const
+    {
+      return std::get<typename ChainFor<T, Method>::type>(m_chains);
+    }
+
+    /// @brief Registers a hook on @p Method at the given @p Point with the given @p priority.
+    ///
+    /// Lower priority values run first, prefer the `Priority::` named constants.
+    ///
+    /// The hook signature must be:
+    /// @code
+    /// void(CI&, T*, Params...)
+    /// @endcode
+    /// where `CI` is `CallbackInfo` for `void` methods or `CallbackInfoReturnable<Ret>`
+    /// for non-void methods.
+    ///
+    /// @tparam Method   A reflection of a hookable member of @p T.
+    /// @tparam Point    The injection point (`Head`, `Tail`, or `Return`).
+    /// @tparam Fn       The callable type of the hook.
+    /// @param  fn       The hook to register.
+    /// @param  priority Execution order relative to other hooks at the same point.
+    /// @returns `std::expected<void, MixinError>`. Always check the return value,
+    ///          unhandled errors produce a compiler warning.
+    ///
+    /// @par Example
+    /// @code
+    /// reg->inject<^^GameWorld::mineBlock, InjectPoint::Head>(
+    ///     [](splice::CallbackInfo& ci, GameWorld*, Player* p,
+    ///        int, int y, int) {
+    ///         if (y == 0) ci.cancelled = true;
+    ///     });
+    /// @endcode
+    template<std::meta::info Method, InjectPoint Point, typename Fn>
+    [[nodiscard]] std::expected<void, MixinError> inject(Fn &&fn, int priority = Priority::Normal)
+    {
+      static_assert(Point != InjectPoint::Return || !std::is_void_v<typename ChainFor<T, Method>::type::RetT>,
+          "inject: InjectPoint::Return is not available on void methods.");
+
+      using Hook = typename ChainFor<T, Method>::type::Hook;
+      auto result = chain<Method>().add(Point, Hook(std::forward<Fn>(fn)), priority);
+
+      SPLICE_ASSERT(result.has_value(), std::string(std::meta::identifier_of(Method)) + ": hook registration failed");
+
+      return result;
+    }
+
+    /// @brief Registers a hook that rewrites a single argument of @p Method by index.
+    ///
+    /// The hook receives the current value of the argument and returns the replacement.
+    /// Internally registers a `Head` hook.
+    ///
+    /// @tparam Method   A reflection of a hookable member of @p T.
+    /// @tparam ArgIndex Zero-based index into the method's declared parameters,
+    ///                  not counting the leading `T*` instance pointer.
+    /// @tparam Fn       A callable with signature `ArgT(ArgT)`.
+    /// @param  fn       The rewrite function.
+    /// @param  priority Execution order relative to other hooks at the same point.
+    /// @returns `std::expected<void, MixinError>`.
+    ///
+    /// @par Example
+    /// @code
+    /// reg->modify_arg<^^GameWorld::calcDamage, 1>(
+    ///     [](float amount) -> float { return amount * 2.0f; });
+    /// @endcode
+    template<std::meta::info Method, size_t ArgIndex, typename Fn>
+    [[nodiscard]] std::expected<void, MixinError> modify_arg(Fn &&fn, int priority = Priority::Normal)
+    {
+      using Chain = typename ChainFor<T, Method>::type;
+      using Params = ParamTuple<Method>;
+
+      static_assert(ArgIndex < std::tuple_size_v<Params>, "modify_arg: ArgIndex is out of range for this method.");
+
+      return modify_arg_impl<Method, ArgIndex>(std::forward<Fn>(fn), priority, static_cast<Params *>(nullptr));
+    }
+
+    /// @brief Registers a hook that rewrites the return value of @p Method.
+    ///
+    /// The hook receives the current return value and returns the replacement.
+    /// Internally registers a `Return` hook. Only available on non-`void` methods.
+    ///
+    /// @tparam Method A reflection of a non-void hookable member of @p T.
+    /// @tparam Fn     A callable with signature `Ret(Ret)`.
+    /// @param  fn     The rewrite function.
+    /// @param  priority Execution order relative to other hooks at the same point.
+    /// @returns `std::expected<void, MixinError>`.
+    ///
+    /// @par Example
+    /// @code
+    /// reg->modify_return<^^GameWorld::calcDamage>(
+    ///     [](float result) -> float {
+    ///         return std::clamp(result, 0.0f, 20.0f);
+    ///     });
+    /// @endcode
+    template<std::meta::info Method, typename Fn>
+    [[nodiscard]] std::expected<void, MixinError> modify_return(Fn &&fn, int priority = Priority::Normal)
+    {
+      using Chain = typename ChainFor<T, Method>::type;
+      using Ret = typename Chain::RetT;
+
+      static_assert(!std::is_void_v<Ret>, "modify_return: not available on void methods.");
+
+      auto wrapper = [f = std::forward<Fn>(fn)](CallbackInfoReturnable<Ret> &ci, auto &&...) mutable
+      {
+        if (ci.return_value.has_value())
+          ci.return_value = f(*ci.return_value);
+      };
+
+      return chain<Method>().add(InjectPoint::Return, typename Chain::Hook(std::move(wrapper)), priority);
+    }
+
+    /// @brief Dispatches a call to @p Method through the full hook chain.
+    ///
+    /// The first argument must be a `T*` instance pointer, followed by the
+    /// method's normal parameters.
+    ///
+    /// @tparam Method       A reflection of a hookable member of @p T.
+    /// @tparam DispatchArgs Argument types forwarded to the chain.
+    /// @param  args         The instance pointer followed by the method's parameters.
+    ///
+    /// @par Example
+    /// @code
+    /// reg->dispatch<^^GameWorld::mineBlock>(&world, &steve, 10, 64, 5);
+    /// @endcode
+    template<std::meta::info Method, typename... DispatchArgs>
+    auto dispatch(DispatchArgs &&...args)
+    {
+      return chain<Method>().dispatch(std::forward<DispatchArgs>(args)...);
+    }
+
+    /// @brief Prints a summary of all hookable methods and their registered hook
+    /// counts to stdout.
+    ///
+    /// Useful during development to verify that hooks are being registered as expected.
+    ///
+    /// @par Example output
+    /// @code
+    /// Registry for GameWorld:
+    ///   [mineBlock            ]  head: 1  tail: 1  return: 0
+    ///   [calcDamage           ]  head: 0  tail: 0  return: 1
+    /// @endcode
+    void print_registry() const
+    {
+      std::println("Registry for {}:", std::string(std::meta::identifier_of(^^T)));
+      template for (constexpr std::meta::info m: Methods)
+      {
+        std::println("  [{:<20}]  head: {}  tail: {}  return: {}", std::string(std::meta::identifier_of(m)),
+            chain<m>().head_count(), chain<m>().tail_count(), chain<m>().return_count());
+      }
+    }
+
+  private:
+    /// @brief Constructs the original function wrapper for the reflected method @p m.
+    ///
+    /// The wrapper captures the instance pointer as the first argument, matching
+    /// the `HookChain`'s expected signature.
+    ///
+    /// @tparam m      A reflection of a hookable member of @p T.
+    /// @tparam Params The method's parameter types, deduced from the tuple pointer.
+    template<std::meta::info m, typename... Params>
+    static auto make_original(std::tuple<Params...> *)
+    {
+      using Fn = typename ChainFor<T, m>::type::Fn;
+      return Fn { [](T *self, Params... args) { return (self->[:m:])(args...); } };
+    }
+
+    template<std::meta::info Method, size_t ArgIndex, typename Fn, typename... Params>
+    std::expected<void, MixinError> modify_arg_impl(Fn &&fn, int priority, std::tuple<Params...> *)
+    {
+      using Chain = typename ChainFor<T, Method>::type;
+
+      auto wrapper = [f = std::forward<Fn>(fn)](typename Chain::CI &, T *, Params &...args) mutable
+      { std::get<ArgIndex>(std::tie(args...)) = f(std::get<ArgIndex>(std::tie(args...))); };
+
+      return chain<Method>().add(InjectPoint::Head, typename Chain::Hook(std::move(wrapper)), priority);
+    }
+  };
+
+} // namespace splice
