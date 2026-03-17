@@ -4,9 +4,9 @@
 TEST_CASE("Priority constants are strictly ordered", "[priority]")
 {
   REQUIRE(splice::hook::Priority::Highest < splice::hook::Priority::High);
-  REQUIRE(splice::hook::Priority::High    < splice::hook::Priority::Normal);
-  REQUIRE(splice::hook::Priority::Normal  < splice::hook::Priority::Low);
-  REQUIRE(splice::hook::Priority::Low     < splice::hook::Priority::Lowest);
+  REQUIRE(splice::hook::Priority::High < splice::hook::Priority::Normal);
+  REQUIRE(splice::hook::Priority::Normal < splice::hook::Priority::Low);
+  REQUIRE(splice::hook::Priority::Low < splice::hook::Priority::Lowest);
 }
 
 TEST_CASE("Priority arithmetic works as expected", "[priority]")
@@ -17,6 +17,5 @@ TEST_CASE("Priority arithmetic works as expected", "[priority]")
 
 TEST_CASE("Priority::Normal is the midpoint of Highest and Lowest", "[priority]")
 {
-  REQUIRE(splice::hook::Priority::Normal
-      == (splice::hook::Priority::Highest + splice::hook::Priority::Lowest) / 2);
+  REQUIRE(splice::hook::Priority::Normal == (splice::hook::Priority::Highest + splice::hook::Priority::Lowest) / 2);
 }
