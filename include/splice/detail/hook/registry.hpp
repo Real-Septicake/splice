@@ -219,27 +219,32 @@ namespace splice::hook
       return chain<Method>().add(InjectPoint::Return, typename Chain::Hook(std::move(wrapper)), priority);
     }
 
-    /// @brief Registers the static functions annotated with `[[= injection{/* ... */}]]` 
+    /// @brief Registers the static functions annotated with `[[= injection{/* ... */}]]`
     /// in @p Source as hooks based on the values present in the annotation
     ///
     /// @tparam Source The class containing the injections
     /// @returns `std::expected<void, HookError>`.
     template<typename Source>
-    [[nodiscard]] std::expected<void, HookError> inject_all() {
-      template for (constexpr std::meta::info m : splice::detail::injection_methods<Source>()) {
-        template for(constexpr std::meta::info a_m : [:std::meta::reflect_constant_array(std::meta::annotations_of_with_type(m, ^^splice::hook::injection)):]) {
+    [[nodiscard]] std::expected<void, HookError> inject_all()
+    {
+      template for (constexpr std::meta::info m: splice::detail::injection_methods<Source>())
+      {
+        template for (constexpr std::meta::info a_m: [:std::meta::reflect_constant_array(
+                                                           std::meta::annotations_of_with_type(
+                                                               m, ^^splice::hook::injection)):])
+        {
           constexpr splice::hook::injection a = std::meta::extract<splice::hook::injection>(a_m);
           if constexpr (std::meta::parent_of(a.what) == ^^T) // only try to register hooks for the registry's type
           {
             using Chain = splice::detail::ChainFor<T, a.what>::type;
 
             auto ret = chain<a.what>().add(a.where, typename Chain::Hook([:m:]), a.priority);
-            if(!ret)
+            if (!ret)
               return ret;
           }
         }
       }
-      return { };
+      return {};
     }
 
 
@@ -353,8 +358,8 @@ namespace splice::hook
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Head` with the specified priority
-#define SPLICE_PRIO_INJECT_HEAD(clazz, prio) \
-  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Head, .priority = prio }
+#define SPLICE_PRIO_INJECT_HEAD(clazz, prio)                                                                           \
+  = splice::hook::injection { .what = ^^clazz, .where = splice::hook::InjectPoint::Head, .priority = prio }
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Head` with `Normal` priority
@@ -362,8 +367,8 @@ namespace splice::hook
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Tail` with the specified priority
-#define SPLICE_PRIO_INJECT_TAIL(clazz, prio) \
-  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Tail, .priority = prio }
+#define SPLICE_PRIO_INJECT_TAIL(clazz, prio)                                                                           \
+  = splice::hook::injection { .what = ^^clazz, .where = splice::hook::InjectPoint::Tail, .priority = prio }
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Tail` with `Normal` priority
@@ -371,8 +376,8 @@ namespace splice::hook
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Return` with the specified priority
-#define SPLICE_PRIO_INJECT_RETURN(clazz, prio) \
-  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Return, .priority = prio }
+#define SPLICE_PRIO_INJECT_RETURN(clazz, prio)                                                                         \
+  = splice::hook::injection { .what = ^^clazz, .where = splice::hook::InjectPoint::Return, .priority = prio }
 
 /// @brief Shorthand annotation for marking a method as an injection at
 /// `splice::hook::InjectPoint::Return` with `Normal` priority
