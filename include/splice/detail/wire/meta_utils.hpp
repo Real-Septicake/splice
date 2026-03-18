@@ -147,7 +147,8 @@ namespace splice::detail::wire
   /// @brief A `std::tuple` whose elements are the `HookChain` types for each
   /// signal method on @p T, in declaration order.
   ///
-  /// @tparam T The emitter class whose signal methods define the tuple's element types.
+  /// @tparam T The emitter class whose signal methods define the tuple's element
+  /// types.
   template<typename T, auto Methods, std::size_t... Is>
   auto signal_chain_tuple_impl(
       std::index_sequence<Is...>) -> std::tuple<typename SignalChainFor<T, Methods[Is]>::type...>;

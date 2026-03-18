@@ -20,7 +20,8 @@ public:
 
 SPLICE_HOOK_REGISTRY(DummyWorld, g_dummy);
 
-/// Returns a fresh isolated registry for each test, avoiding cross-test hook accumulation.
+/// Returns a fresh isolated registry for each test, avoiding cross-test hook
+/// accumulation.
 static auto make_registry() { return splice::hook::ClassRegistry<DummyWorld>::make_isolated(); }
 
 TEST_CASE("Head hook runs before original", "[registry][inject][head]")

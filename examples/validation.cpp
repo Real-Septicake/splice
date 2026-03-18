@@ -37,7 +37,9 @@ void setupValidation()
       {
         if (amount <= 0.0f)
         {
-          std::println("[validation] rejected withdrawal — amount must be positive (got {:.2f})", amount);
+          std::println("[validation] rejected withdrawal — amount must be "
+                       "positive (got {:.2f})",
+              amount);
           ci.cancelled = true;
         }
       },

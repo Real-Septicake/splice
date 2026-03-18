@@ -56,10 +56,12 @@ namespace splice::detail
     void *listener = nullptr;
   };
 
-  /// @brief Holds the original function and all registered hooks for a single hookable method.
+  /// @brief Holds the original function and all registered hooks for a single
+  /// hookable method.
   ///
   /// @tparam Ret  The method's return type.
-  /// @tparam Args The method's full parameter list, including the leading `Class*` instance pointer.
+  /// @tparam Args The method's full parameter list, including the leading
+  /// `Class*` instance pointer.
   ///
   /// The hook signature is `void(CI&, Args...)`, where `CI` is `CallbackInfo` for
   /// `void` methods or `CallbackInfoReturnable<Ret>` for non-`void` methods.
@@ -81,7 +83,8 @@ namespace splice::detail
     /// @brief The return type of the original function.
     using RetT = Ret;
 
-    /// @brief Hook function type, receives `CI` by reference followed by all original method arguments.
+    /// @brief Hook function type, receives `CI` by reference followed by all
+    /// original method arguments.
     using Hook = std::function<void(CI &, Args &...)>;
 
     /// @brief The original method implementation.
@@ -89,13 +92,16 @@ namespace splice::detail
     /// Can be replaced to wrap or override the original behaviour entirely.
     Fn original;
 
-    /// @brief Hooks registered at `InjectPoint::Head`, sorted ascending by priority on insertion.
+    /// @brief Hooks registered at `InjectPoint::Head`, sorted ascending by
+    /// priority on insertion.
     std::vector<HookEntry<Hook>> head_hooks;
 
-    /// @brief Hooks registered at `InjectPoint::Tail`, sorted ascending by priority on insertion.
+    /// @brief Hooks registered at `InjectPoint::Tail`, sorted ascending by
+    /// priority on insertion.
     std::vector<HookEntry<Hook>> tail_hooks;
 
-    /// @brief Hooks registered at `InjectPoint::Return`, sorted ascending by priority on insertion.
+    /// @brief Hooks registered at `InjectPoint::Return`, sorted ascending by
+    /// priority on insertion.
     ///
     /// Receives the about-to-be-returned value in `ci.return_value`.
     std::vector<HookEntry<Hook>> return_hooks;
@@ -109,7 +115,8 @@ namespace splice::detail
     /// @brief Returns the number of hooks registered at `Return`.
     size_t return_count() const { return return_hooks.size(); }
 
-    /// @brief Registers a hook at the given inject @p point with the given @p priority.
+    /// @brief Registers a hook at the given inject @p point with the given @p
+    /// priority.
     ///
     /// Hooks are inserted in sorted order, lowest priority value runs first.
     ///
