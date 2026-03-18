@@ -350,3 +350,30 @@ namespace splice::hook
 /// Expands to `[[= splice::hook::hookable{}]]`.
 #define SPLICE_HOOKABLE                                                                                                \
   = splice::hook::hookable { }
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Head` with the specified priority
+#define SPLICE_PRIO_INJECT_HEAD(clazz, prio) \
+  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Head, .priority = prio }
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Head` with `Normal` priority
+#define SPLICE_INJECT_HEAD(clazz) SPLICE_PRIO_INJECT_HEAD(clazz, splice::hook::Priority::Normal)
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Tail` with the specified priority
+#define SPLICE_PRIO_INJECT_TAIL(clazz, prio) \
+  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Tail, .priority = prio }
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Tail` with `Normal` priority
+#define SPLICE_INJECT_TAIL(clazz) SPLICE_PRIO_INJECT_TAIL(clazz, splice::hook::Priority::Normal)
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Return` with the specified priority
+#define SPLICE_PRIO_INJECT_RETURN(clazz, prio) \
+  = splice::hook::injection{ .what = ^^clazz, .where = splice::hook::InjectPoint::Return, .priority = prio }
+
+/// @brief Shorthand annotation for marking a method as an injection at
+/// `splice::hook::InjectPoint::Return` with `Normal` priority
+#define SPLICE_INJECT_RETURN(clazz) SPLICE_PRIO_INJECT_TAIL(clazz, splice::hook::Priority::Normal)

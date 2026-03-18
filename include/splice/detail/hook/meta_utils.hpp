@@ -28,8 +28,8 @@ namespace splice::hook
   /// @brief Annotation for marking a method as a hook to be registered by
   /// `inject_all()`
   ///
-  /// Apply with `[[= splice::hook::injection{/* ... */}]]` to any non-special,
-  /// static member function.
+  /// Apply with `[[= splice::hook::injection{/* ... */}]]` or with the `SPLICE[_PRIO]_INJECT_*`
+  /// macros on any non-special, static member function.
   ///
   /// @par Example
   /// @code
