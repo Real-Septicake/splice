@@ -219,16 +219,24 @@ namespace splice::hook
       return chain<Method>().add(InjectPoint::Return, typename Chain::Hook(std::move(wrapper)), priority);
     }
 
+    /// @brief Registers the static functions annotated with `[[= injection{/* ... */}]]` 
+    /// in @p Source as hooks based on the values present in the annotation
+    ///
+    /// @tparam Source The class containing the injections
+    /// @returns `std::expected<void, HookError>`.
     template<typename Source>
     [[nodiscard]] std::expected<void, HookError> inject_all() {
       template for (constexpr std::meta::info m : splice::detail::injection_methods<Source>()) {
-        constexpr auto annotations = std::meta::annotations_of_with_type(m, ^^splice::hook::injection);
-        static_assert(annotations.size() == 1, "Annotation [[injection]] may only appear once on a method.");
-        constexpr splice::hook::injection a = annotations[0];
-        auto ret = chain<a.what>().add(a.where, typename splice::detail::ChainFor<T, a.what>::type::Hook([:m:]), a.priority);
-        if(!ret) {
-            SPLICE_ASSERT(false, "Adding to hook failed");
-            return ret;
+        template for(constexpr std::meta::info a_m : [:std::meta::reflect_constant_array(std::meta::annotations_of_with_type(m, ^^splice::hook::injection)):]) {
+          constexpr splice::hook::injection a = std::meta::extract<splice::hook::injection>(a_m);
+          if constexpr (std::meta::parent_of(a.what) == ^^T) // only try to register hooks for the registry's type
+          {
+            using Chain = splice::detail::ChainFor<T, a.what>::type;
+
+            auto ret = chain<a.what>().add(a.where, typename Chain::Hook([:m:]), a.priority);
+            if(!ret)
+              return ret;
+          }
         }
       }
       return { };

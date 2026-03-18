@@ -25,10 +25,29 @@ namespace splice::hook
   {
   };
 
+  /// @brief Annotation for marking a method as a hook to be registered by
+  /// `inject_all()`
+  ///
+  /// Apply with `[[= splice::hook::injection{/* ... */}]]` to any non-special,
+  /// static member function.
+  ///
+  /// @par Example
+  /// @code
+  /// class C {
+  ///     [[= splice::hook::injection{
+  ///         .what = ^^GameWorld::mineBlock,
+  ///         .where = splice::hook::InjectPoint::Head
+  ///     }]]
+  ///     void injectMine(splice::detail::CallbackInfo &, GameWorld *, int, int, int);
+  /// }
+  /// @endcode
   struct injection
   {
+    /// @brief The method to hook
     std::meta::info what;
+    /// @brief What kind of hook this is
     InjectPoint where;
+    /// @brief The priority of the hook
     std::size_t priority = Priority::Normal;
     // std::size_t arg = -1; // for when I get modifying arguments separated
   };
@@ -136,17 +155,26 @@ namespace splice::detail
     return result;
   }
 
+  /// @brief Returns `true` if the reflected member @p m has a `[[= splice::hook::injection{/* ... */}]]` annotation.
   consteval bool has_injection(std::meta::info m) {
     return !std::meta::annotations_of_with_type(m, ^^splice::hook::injection).empty();
   }
 
+  /// @brief Returns `true` if @p m is a non-special,static member function annotated with
+  /// `[[= splice::hook::injection{/* ... */}]]`.
+  ///
+  /// Excludes constructors, destructors, and operators.
   consteval bool is_injection_method(std::meta::info m)
   {
     return std::meta::is_function(m) && std::meta::has_identifier(m) && !std::meta::is_constructor(m)
            && std::meta::is_static_member(m) && !std::meta::is_destructor(m)
-           && !std::meta::is_operator_function(m) && has_hookable(m);
+           && !std::meta::is_operator_function(m) && has_injection(m);
   }
 
+  /// @brief Returns a `std::array` of reflected methods on @p T annotated with
+  /// `[[= splice::hook::injection{/* ... */}]]`, in declaration order.
+  ///
+  /// @tparam T The class to inspect.
   template<typename T>
   consteval auto injection_methods()
   {
