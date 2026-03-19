@@ -263,7 +263,7 @@ namespace splice::hook
     }
 
     template<typename Source>
-    [[nodiscard]] std::expected<void, HookError> inject_all_instanced(Source *ptr)
+    [[nodiscard]] std::expected<void, HookError> inject_all_instanced(std::shared_ptr<Source> ptr)
     {
       template for (constexpr std::meta::info m: splice::detail::injection_methods<Source>())
       {
@@ -278,10 +278,11 @@ namespace splice::hook
             {
               using Chain = splice::detail::ChainFor<T, a.what>::type;
               constexpr auto fn = unpackFunc<typename Chain::RetT, Source, splice::detail::ParamTuple<m>>(m);
-              auto wrapper = [src = std::forward<Source *>(ptr), &fn](Chain::CI &ci, auto &&...args) mutable
+              std::weak_ptr<Source> wp = ptr;
+              auto wrapper = [src = wp, &fn](Chain::CI &ci, auto &&...args) mutable
               {
-                if (src != nullptr)
-                  (src->*fn)(ci, (args)...);
+                if (!src.expired())
+                  (src.lock().get()->*fn)(ci, (args)...);
               };
 
               auto ret = chain<a.what>().add(a.where, typename Chain::Hook(wrapper), a.priority);

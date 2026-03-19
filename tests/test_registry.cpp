@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <splice/splice.hpp>
+#include <type_traits>
 #include <vector>
 
 struct DummyPlayer
@@ -378,7 +379,7 @@ public:
 TEST_CASE("Instanced injections function", "[registry][class_inject][instanced]")
 {
   auto reg = make_registry();
-  Test5 *i = new Test5();
+  auto i = std::make_shared<Test5>();
   auto result = reg->inject_all_instanced(i);
 
   REQUIRE(result.has_value());
@@ -388,6 +389,73 @@ TEST_CASE("Instanced injections function", "[registry][class_inject][instanced]"
   reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
 
   REQUIRE(i->val == 1);
+}
 
-  delete i;
+class Test6
+{
+public:
+  static int v;
+  int val = 0;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    val++;
+    v++;
+  }
+};
+
+int Test6::v = 0;
+
+TEST_CASE("Instanced injection only affects its instance", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  auto i1 = std::make_shared<Test6>();
+  auto i2 = std::make_shared<Test6>();
+
+  auto result = reg->inject_all_instanced(i1);
+  REQUIRE(result.has_value());
+  result = reg->inject_all_instanced(i2);
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(i1->val == 1);
+  REQUIRE(i2->val == 1);
+  REQUIRE(Test6::v == 2);
+}
+
+class Test7
+{
+public:
+  static int v;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    v++;
+  }
+};
+
+int Test7::v = 0;
+
+TEST_CASE("Instanced injections don't run after pointer is discarded", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  auto i = std::make_shared<Test7>();
+  auto result = reg->inject_all_instanced(i);
+
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(Test7::v == 1);
+
+  i.reset();
+
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(Test7::v == 1);
 }
