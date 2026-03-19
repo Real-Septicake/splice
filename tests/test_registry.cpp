@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 #include <splice/splice.hpp>
-#include <type_traits>
 #include <vector>
 
 struct DummyPlayer
