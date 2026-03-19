@@ -237,22 +237,57 @@ namespace splice::hook
     /// @tparam Source The class containing the injections
     /// @returns `std::expected<void, HookError>`.
     template<typename Source>
-    [[nodiscard]] std::expected<void, HookError> inject_all()
+    [[nodiscard]] std::expected<void, HookError> inject_all_static()
     {
       template for (constexpr std::meta::info m: splice::detail::injection_methods<Source>())
       {
-        template for (constexpr std::meta::info a_m: [:std::meta::reflect_constant_array(
-                                                           std::meta::annotations_of_with_type(
-                                                               m, ^^splice::hook::injection)):])
+        if constexpr (std::meta::is_static_member(m))
         {
-          constexpr splice::hook::injection a = std::meta::extract<splice::hook::injection>(a_m);
-          if constexpr (std::meta::parent_of(a.what) == ^^T) // only try to register hooks for the registry's type
+          template for (constexpr std::meta::info a_m: [:std::meta::reflect_constant_array(
+                                                             std::meta::annotations_of_with_type(
+                                                                 m, ^^splice::hook::injection)):])
           {
-            using Chain = splice::detail::ChainFor<T, a.what>::type;
+            constexpr splice::hook::injection a = std::meta::extract<splice::hook::injection>(a_m);
+            if constexpr (std::meta::parent_of(a.what) == ^^T) // only try to register hooks for the registry's type
+            {
+              using Chain = splice::detail::ChainFor<T, a.what>::type;
 
-            auto ret = chain<a.what>().add(a.where, typename Chain::Hook([:m:]), a.priority);
-            if (!ret)
-              return ret;
+              auto ret = chain<a.what>().add(a.where, typename Chain::Hook([:m:]), a.priority);
+              if (!ret)
+                return ret;
+            }
+          }
+        }
+      }
+      return { };
+    }
+
+    template<typename Source>
+    [[nodiscard]] std::expected<void, HookError> inject_all_instanced(Source *ptr)
+    {
+      template for (constexpr std::meta::info m: splice::detail::injection_methods<Source>())
+      {
+        if constexpr (!std::meta::is_static_member(m))
+        {
+          template for (constexpr std::meta::info a_m: [:std::meta::reflect_constant_array(
+                                                             std::meta::annotations_of_with_type(
+                                                                 m, ^^splice::hook::injection)):])
+          {
+            constexpr splice::hook::injection a = std::meta::extract<splice::hook::injection>(a_m);
+            if constexpr (std::meta::parent_of(a.what) == ^^T) // only try to register hooks for the registry's type
+            {
+              using Chain = splice::detail::ChainFor<T, a.what>::type;
+              constexpr auto fn = unpackFunc<typename Chain::RetT, Source, splice::detail::ParamTuple<m>>(m);
+              auto wrapper = [src = std::forward<Source *>(ptr), &fn](Chain::CI &ci, auto &&...args) mutable
+              {
+                if (src != nullptr)
+                  (src->*fn)(ci, (args)...);
+              };
+
+              auto ret = chain<a.what>().add(a.where, typename Chain::Hook(wrapper), a.priority);
+              if (!ret)
+                return ret;
+            }
           }
         }
       }
@@ -327,6 +362,18 @@ namespace splice::hook
       { std::get<ArgIndex>(std::tie(args...)) = f(std::get<ArgIndex>(std::tie(args...))); };
 
       return chain<Method>().add(InjectPoint::Head, typename Chain::Hook(std::move(wrapper)), priority);
+    }
+
+    template<typename Ret, typename Source, typename ArgTuple, std::size_t... Idxs>
+    consteval auto __unpackFuncImpl(std::meta::info m, std::index_sequence<Idxs...>)
+    {
+      return std::meta::extract<Ret (Source::*)(std::tuple_element_t<Idxs, ArgTuple>...)>(m);
+    }
+
+    template<typename Ret, typename Source, typename ArgTuple>
+    consteval auto unpackFunc(std::meta::info m)
+    {
+      return __unpackFuncImpl<Ret, Source, ArgTuple>(m, std::make_index_sequence<std::tuple_size<ArgTuple>::value>());
     }
   };
 

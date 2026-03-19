@@ -246,11 +246,11 @@ public:
 
 int Test1::val = 0;
 
-TEST_CASE("Ensure functions actually get injected", "[registry][class_inject]")
+TEST_CASE("Ensure functions actually get injected", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
 
-  auto result = reg->inject_all<Test1>();
+  auto result = reg->inject_all_static<Test1>();
 
   REQUIRE(result.has_value());
 
@@ -288,10 +288,10 @@ public:
 
 std::vector<int> Test2::v = std::vector<int> { };
 
-TEST_CASE("Ensure hooks respect priority", "[registry][class_inject]")
+TEST_CASE("Ensure hooks respect priority", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test2>();
+  auto result = reg->inject_all_static<Test2>();
 
   REQUIRE(result.has_value());
 
@@ -322,10 +322,10 @@ public:
 
 std::vector<int> Test3::v = std::vector<int> { };
 
-TEST_CASE("Hooks without priority are registered in reverse declaration order", "[registry][class_inject]")
+TEST_CASE("Hooks without priority are registered in reverse declaration order", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test3>();
+  auto result = reg->inject_all_static<Test3>();
 
   REQUIRE(result.has_value());
 
@@ -352,14 +352,42 @@ class Test4
   }
 };
 
-TEST_CASE("Only register hooks for the specified class", "[registry][class_inject]")
+TEST_CASE("Only try to register hooks for the specified class", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test4>();
+  auto result = reg->inject_all_static<Test4>();
 
   REQUIRE(result.has_value());
 
-  result = g_obj->inject_all<Test4>();
+  result = g_obj->inject_all_static<Test4>();
 
   REQUIRE(result.has_value());
+}
+
+class Test5
+{
+public:
+  int val = 0;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    val = 1;
+  }
+};
+
+TEST_CASE("Instanced injections function", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  Test5 *i = new Test5();
+  auto result = reg->inject_all_instanced(i);
+
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(i->val == 1);
+
+  delete i;
 }

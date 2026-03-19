@@ -29,7 +29,10 @@ namespace splice::hook
   /// `inject_all()`
   ///
   /// Apply with `[[= splice::hook::injection{/* ... */}]]` or with the
-  /// `SPLICE[_PRIO]_INJECT_*` macros on any non-special, static member function.
+  /// `SPLICE[_PRIO]_INJECT_*` macros on any non-special member function.
+  ///
+  /// Non-static injection methods are registered via `inject_all_instanced`
+  /// whereas static injection methods are registered via `inject_all`
   ///
   /// @par Example
   /// @code
@@ -182,16 +185,14 @@ namespace splice::detail
     return !std::meta::annotations_of_with_type(m, ^^splice::hook::injection).empty();
   }
 
-  /// @brief Returns `true` if @p m is a non-special,static member function
-  /// annotated with
+  /// @brief Returns `true` if @p m is a non-special member function annotated with
   /// `[[= splice::hook::injection{/* ... */}]]`.
   ///
   /// Excludes constructors, destructors, and operators.
   consteval bool is_injection_method(std::meta::info m)
   {
     return std::meta::is_function(m) && std::meta::has_identifier(m) && !std::meta::is_constructor(m)
-           && std::meta::is_static_member(m) && !std::meta::is_destructor(m) && !std::meta::is_operator_function(m)
-           && has_injection(m);
+           && !std::meta::is_destructor(m) && !std::meta::is_operator_function(m) && has_injection(m);
   }
 
   /// @brief Returns a `std::array` of reflected methods on @p T annotated with
