@@ -32,7 +32,7 @@ namespace splice::hook
   /// `SPLICE[_PRIO]_INJECT_*` macros on any non-special member function.
   ///
   /// Non-static injection methods are registered via `inject_all_instanced`
-  /// whereas static injection methods are registered via `inject_all`
+  /// whereas static injection methods are registered via `inject_all_static`
   ///
   /// @par Example
   /// @code
