@@ -246,11 +246,11 @@ public:
 
 int Test1::val = 0;
 
-TEST_CASE("Ensure functions actually get injected", "[registry][class_inject]")
+TEST_CASE("Ensure functions actually get injected", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
 
-  auto result = reg->inject_all<Test1>();
+  auto result = reg->inject_all_static<Test1>();
 
   REQUIRE(result.has_value());
 
@@ -288,10 +288,10 @@ public:
 
 std::vector<int> Test2::v = std::vector<int> { };
 
-TEST_CASE("Ensure hooks respect priority", "[registry][class_inject]")
+TEST_CASE("Ensure hooks respect priority", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test2>();
+  auto result = reg->inject_all_static<Test2>();
 
   REQUIRE(result.has_value());
 
@@ -322,10 +322,10 @@ public:
 
 std::vector<int> Test3::v = std::vector<int> { };
 
-TEST_CASE("Hooks without priority are registered in reverse declaration order", "[registry][class_inject]")
+TEST_CASE("Hooks without priority are registered in reverse declaration order", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test3>();
+  auto result = reg->inject_all_static<Test3>();
 
   REQUIRE(result.has_value());
 
@@ -352,14 +352,138 @@ class Test4
   }
 };
 
-TEST_CASE("Only register hooks for the specified class", "[registry][class_inject]")
+TEST_CASE("Only try to register hooks for the specified class", "[registry][class_inject][static]")
 {
   auto reg = make_registry();
-  auto result = reg->inject_all<Test4>();
+  auto result = reg->inject_all_static<Test4>();
 
   REQUIRE(result.has_value());
 
-  result = g_obj->inject_all<Test4>();
+  result = g_obj->inject_all_static<Test4>();
 
   REQUIRE(result.has_value());
+}
+
+class Test5
+{
+public:
+  int val = 0;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    val = 1;
+  }
+};
+
+TEST_CASE("Instanced injections function", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  auto i = std::make_shared<Test5>();
+  auto result = reg->inject_all_instanced(i);
+
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(i->val == 1);
+}
+
+class Test6
+{
+public:
+  static int v;
+  int val = 0;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    val++;
+    v++;
+  }
+};
+
+int Test6::v = 0;
+
+TEST_CASE("Instanced injection only affects its instance", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  auto i1 = std::make_shared<Test6>();
+  auto i2 = std::make_shared<Test6>();
+
+  auto result = reg->inject_all_instanced(i1);
+  REQUIRE(result.has_value());
+  result = reg->inject_all_instanced(i2);
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(i1->val == 1);
+  REQUIRE(i2->val == 1);
+  REQUIRE(Test6::v == 2);
+}
+
+class Test7
+{
+public:
+  static int v;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep, .where = splice::hook::InjectPoint::Head }]] void inject(
+      splice::detail::CallbackInfo &, DummyWorld *, DummyPlayer *, int, int)
+  {
+    v++;
+  }
+};
+
+int Test7::v = 0;
+
+TEST_CASE("Instanced injections don't run after pointer is discarded", "[registry][class_inject][instanced]")
+{
+  auto reg = make_registry();
+  auto i = std::make_shared<Test7>();
+  auto result = reg->inject_all_instanced(i);
+
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(Test7::v == 1);
+
+  i.reset();
+
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(Test7::v == 1);
+}
+
+class Test8
+{
+public:
+  static int v;
+  [[= splice::hook::injection { .what = ^^DummyWorld::onStep,
+      .where = splice::hook::InjectPoint::Head }]][[= splice::hook::injection { .what = ^^DummyWorld::onStep,
+      .where = splice::hook::InjectPoint::Head }]] static void inject(splice::detail::CallbackInfo &, DummyWorld *,
+      DummyPlayer *, int, int)
+  {
+    v++;
+  }
+};
+
+int Test8::v = 0;
+
+TEST_CASE("Repeat annotations function", "[registry][class_inject]")
+{
+  auto reg = make_registry();
+  auto result = reg->inject_all_static<Test8>();
+
+  REQUIRE(result.has_value());
+
+  DummyWorld world;
+  DummyPlayer player;
+  reg->dispatch<^^DummyWorld::onStep>(&world, &player, 0, 0);
+
+  REQUIRE(Test8::v == 2);
 }
