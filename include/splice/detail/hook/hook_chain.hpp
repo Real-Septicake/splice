@@ -85,7 +85,7 @@ namespace splice::detail
     /// @brief The return type of the original function.
     using RetT = Ret;
 
-    /// @brief Tuple of argument types
+    /// @brief Tuple of modify_arg hook types
     using ArgHookTuple = std::tuple<std::function<Args(Args)>...>;
 
     /// @brief Hook function type, receives `CI` by reference followed by all
@@ -145,7 +145,6 @@ namespace splice::detail
     std::expected<void, splice::hook::HookError> add_modify_arg(std::tuple_element_t<idx, ArgHookTuple> fn,
         int priority = splice::hook::Priority::Normal, void *listener = nullptr)
     {
-      // adding 1 to skip the `this` pointer
       auto &vec = std::get<idx>(arg_hooks);
       auto it = std::lower_bound(vec.begin(), vec.end(), priority,
           [](const HookEntry<std::tuple_element_t<idx, ArgHookTuple>> &e, int p) { return e.priority < p; });

@@ -180,7 +180,7 @@ namespace splice::detail
   }
 
   /// @brief Returns `true` if @p m is a non-special member function annotated with
-  /// `[[= splice::hook::injection{/* ... */}]]`.
+  /// `[[= splice::hook::injection{/* ... */}]]` or `[[= splice::hook::modify_arg{/*...*/}]]`.
   ///
   /// Excludes constructors, destructors, and operators.
   consteval bool is_injection_method(std::meta::info m)
@@ -191,7 +191,7 @@ namespace splice::detail
   }
 
   /// @brief Returns a `std::array` of reflected methods on @p T annotated with
-  /// `[[= splice::hook::injection{/* ... */}]]`, in declaration order.
+  /// `[[= splice::hook::injection{/* ... */}]]` or `[[= splice::hook::modify_arg{/*...*/}]]`, in declaration order.
   ///
   /// @tparam T The class to inspect.
   template<typename T>
