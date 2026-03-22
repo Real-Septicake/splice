@@ -217,8 +217,9 @@ namespace splice::hook
       return chain<Method>().add(InjectPoint::Return, typename Chain::Hook(std::move(wrapper)), priority);
     }
 
-    /// @brief Registers the static functions annotated with `[[= injection{/* ...
-    /// */}]]` in @p Source as hooks based on the values present in the annotation
+    /// @brief Registers the static functions annotated with `[[= splice::hooK::injection{/* ...
+    /// */}]]` or `[[= splice::hook::modify_arg{/*...*/}]]` in @p Source as hooks based on the values present in the
+    /// annotation
     ///
     /// @tparam Source The class containing the injections
     /// @returns `std::expected<void, HookError>`.
@@ -260,6 +261,14 @@ namespace splice::hook
       return { };
     }
 
+    /// @brief Registers the non-static functions annotated with `[[= injection{/* ...
+    /// */}]]` in @p Source as hooks based on the values present in the annotation
+    ///
+    /// @param ptr The instance to use when calling the methods. If this pointer is
+    /// discarded, the hook will do nothing
+    ///
+    /// @tparam Source The class containing the injections
+    /// @returns `std::expected<void, HookError>`.
     template<typename Source>
     [[nodiscard]] std::expected<void, HookError> inject_all_instanced(std::shared_ptr<Source> ptr)
     {
@@ -294,9 +303,8 @@ namespace splice::hook
               constexpr splice::hook::modify_arg a = std::meta::extract<splice::hook::modify_arg>(a_m);
               if constexpr (std::meta::parent_of(a.what) == ^^T)
               {
-                using Params = splice::detail::ParamTuple<a.what>;
-                constexpr auto fn = _unpackFuncImpl<std::tuple_element_t<a.arg, Params>, Source, Params>(
-                    m, std::index_sequence<a.arg> { });
+                using Type = std::tuple_element_t<a.arg, splice::detail::ParamTuple<a.what>>;
+                constexpr auto fn = std::meta::extract<Type (Source::*)(Type)>(m);
                 std::weak_ptr<Source> wp = ptr;
                 auto wrapper = [src = std::move(wp), &fn](auto arg) mutable
                 {

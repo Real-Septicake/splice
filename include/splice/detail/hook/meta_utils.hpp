@@ -27,7 +27,7 @@ namespace splice::hook
   };
 
   /// @brief Annotation for marking a method as a hook to be registered by
-  /// `inject_all()`
+  /// `inject_all_X()`
   ///
   /// Apply with `[[= splice::hook::injection{/* ... */}]]` or with the
   /// `SPLICE[_PRIO]_INJECT_*` macros on any non-special member function.
@@ -56,6 +56,23 @@ namespace splice::hook
     std::size_t priority = Priority::Normal;
   };
 
+  /// @brief Annotation for marking a method as a `modify_arg` hook to be registered by `inject_all_X()`
+  ///
+  /// Apply with `[[= splice::hook::modify_arg{/*...*/}]]` on any non-special member function
+  ///
+  /// Non-static injection methods are registered via `inject_all_instanced`
+  /// whereas static injection methods are registered via `inject_all_static`
+  ///
+  /// @par Example
+  /// @code
+  /// class C {
+  ///     [[= splice::hook::modify_arg{
+  ///         .what = ^^GameWorld::mineBlock,
+  ///         .arg = 1
+  ///     }]]
+  ///     int modifySecondInt(int);
+  /// }
+  /// @endcode
   struct modify_arg
   {
     /// @brief The method to modify the argument of
