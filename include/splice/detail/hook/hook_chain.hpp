@@ -5,6 +5,7 @@
 #include <functional>
 #include <optional>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -85,7 +86,7 @@ namespace splice::detail
     using RetT = Ret;
 
     /// @brief Tuple of modify_arg hook types
-    using ArgHookTuple = std::tuple<std::function<Args(Args)>...>;
+    using ArgHookTuple = std::tuple<std::function<std::conditional_t<std::is_reference_v<Args>, void, Args>(Args)>...>;
 
     /// @brief Hook function type, receives `CI` by reference followed by all
     /// original method arguments.
@@ -96,7 +97,9 @@ namespace splice::detail
     /// Can be replaced to wrap or override the original behaviour entirely.
     Fn original;
 
-    std::tuple<std::vector<HookEntry<std::function<Args(Args)>>>...> arg_hooks;
+    std::tuple<
+        std::vector<HookEntry<std::function<std::conditional_t<std::is_reference_v<Args>, void, Args>(Args)>>>...>
+        arg_hooks;
 
     /// @brief Hooks registered at `InjectPoint::Head`, sorted ascending by
     /// priority on insertion.
@@ -161,7 +164,7 @@ namespace splice::detail
     auto dispatch(Args... args)
     {
       CI ci { };
-      auto arg_tuple = std::tuple<Args...>(std::move(args)...);
+      auto arg_tuple = std::tuple<Args...>(args...);
 
       run_arg_hooks(arg_tuple, std::make_index_sequence<sizeof...(Args)>());
 
@@ -200,7 +203,10 @@ namespace splice::detail
         auto &vec = std::get<i>(arg_hooks);
         for (auto &e: vec)
         {
-          std::get<i>(arg_tuple) = std::invoke([&e](auto a) { return e.fn(a); }, std::get<i>(arg_tuple));
+          if constexpr (!std::is_reference_v<std::tuple_element_t<i, std::tuple<Args...>>>)
+            std::get<i>(arg_tuple) = std::invoke([&e](auto a) { return e.fn(a); }, std::get<i>(arg_tuple));
+          else
+            std::invoke([&e](auto &&a) { e.fn(a); }, std::move(std::get<i>(arg_tuple)));
         }
       }
     }
